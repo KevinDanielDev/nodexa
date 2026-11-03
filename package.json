@@ -7,7 +7,10 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{js,mjs,ts,tsx,vue,md,json}\"",
     "check-types": "turbo run check-types",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "podman-kube:up": "podman kube play --network nodexa-net --configmap=infra/local/podman/postgres/configmap.yml infra/local/podman/postgres/secret.yml infra/local/podman/postgres/pod.yml",
+    "podman-kube:down": "podman kube down infra/local/podman/postgres/configmap.yml infra/local/podman/postgres/secret.yml infra/local/podman/postgres/pod.yml",
+    "podman-kube:down-force": "podman kube down --force infra/local/podman/postgres/configmap.yml infra/local/podman/postgres/secret.yml infra/local/podman/postgres/pod.yml"
   },
   "devDependencies": {
     "prettier": "3.9.6",

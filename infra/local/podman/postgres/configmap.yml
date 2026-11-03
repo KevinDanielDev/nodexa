@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: nodexa-postgres-config
+
+data:
+  POSTGRES_DB: nodexa
+  POSTGRES_USER: svc_nodexa
