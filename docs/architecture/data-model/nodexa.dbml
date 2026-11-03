@@ -1,0 +1,539 @@
+Project nodexa {
+  database_type: 'PostgreSQL'
+  Note: 'Complete data model: identity, access control, organizations and installation orchestration'
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+// Identity
+
+Enum user_status {
+  active
+  suspended
+  disabled
+}
+
+Enum identity_provider {
+  google
+}
+
+// Authorization
+
+Enum role_scope {
+  platform
+  organization
+}
+
+// Invitations
+
+Enum invitation_status {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+// Installations
+
+Enum installation_status {
+  pending
+  provisioning
+  retrying
+  ready
+  degraded
+  failed
+}
+
+Enum module_status {
+  pending
+  installing
+  retrying
+  ready
+  failed
+}
+
+Enum phase_status {
+  pending
+  running
+  retrying
+  succeeded
+  failed
+}
+
+Enum resource_status {
+  planned
+  creating
+  ready
+  failed
+  deleting
+  deleted
+  unknown
+}
+
+// Execution
+
+Enum outbox_status {
+  pending
+  processing
+  published
+}
+
+Enum event_severity {
+  debug
+  info
+  warning
+  error
+  critical
+}
+
+// =====================================================
+// 01. IDENTITY & AUTHENTICATION
+// =====================================================
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  email varchar(254) [not null]
+  normalized_email varchar(254) [not null, unique]
+
+  first_name varchar(100) [not null]
+  last_name varchar(100) [not null]
+  display_name varchar(150)
+  avatar_url text
+
+  status user_status [not null, default: 'active']
+
+  email_verified_at timestamptz
+  last_login_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  Note: 'Unique person identity across Nodexa'
+}
+
+Table user_credentials {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique]
+
+  password_hash text [not null]
+  password_changed_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Local authentication credentials'
+}
+
+Table user_identities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+
+  provider identity_provider [not null]
+  provider_subject varchar(255) [not null]
+
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (provider, provider_subject) [unique]
+  }
+
+  Note: 'External authentication identities such as Google'
+}
+
+Table user_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+
+  token_hash varchar(255) [not null, unique]
+
+  expires_at timestamptz [not null]
+  last_used_at timestamptz
+  revoked_at timestamptz
+
+  user_agent text
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Individually revocable authenticated sessions'
+}
+
+Table password_reset_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+
+  token_hash varchar(255) [not null, unique]
+  expires_at timestamptz [not null]
+  used_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Single-use password recovery tokens'
+}
+
+Table email_verification_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+
+  token_hash varchar(255) [not null, unique]
+  expires_at timestamptz [not null]
+  used_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Single-use email verification tokens'
+}
+
+// =====================================================
+// 02. AUTHORIZATION
+// =====================================================
+
+Table roles {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  name varchar(100) [not null]
+  scope role_scope [not null]
+
+  description text
+  is_system_role boolean [not null, default: false]
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (scope, name) [unique]
+  }
+
+  Note: 'Platform and organization roles'
+}
+
+Table permissions {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  code varchar(150) [not null, unique]
+  description text
+
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Atomic permissions assigned to roles'
+}
+
+Table role_permissions {
+  role_id uuid [not null]
+  permission_id uuid [not null]
+
+  indexes {
+    (role_id, permission_id) [pk]
+  }
+
+  Note: 'Many-to-many relationship between roles and permissions'
+}
+
+Table user_platform_roles {
+  user_id uuid [not null]
+  role_id uuid [not null]
+
+  assigned_by_user_id uuid
+  assigned_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, role_id) [pk]
+  }
+
+  Note: 'Platform-level role assignments'
+}
+
+// =====================================================
+// 03. ORGANIZATIONS & MEMBERSHIPS
+// =====================================================
+
+Table organizations {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  name varchar(150) [not null]
+  slug varchar(100) [not null, unique]
+
+  status varchar(30) [not null, default: 'active']
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  Note: 'A client business managed by Nodexa'
+}
+
+Table organization_members {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  organization_id uuid [not null]
+  user_id uuid [not null]
+  role_id uuid [not null]
+
+  joined_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (organization_id, user_id) [unique]
+  }
+
+  Note: 'User membership and role inside an organization'
+}
+
+Table invitations {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  organization_id uuid [not null]
+  role_id uuid [not null]
+
+  invited_email varchar(254) [not null]
+  normalized_email varchar(254) [not null]
+
+  token_hash varchar(255) [not null, unique]
+
+  status invitation_status [not null, default: 'pending']
+
+  invited_by_user_id uuid [not null]
+
+  expires_at timestamptz [not null]
+  accepted_at timestamptz
+  revoked_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Invitation required to join an organization'
+}
+
+// =====================================================
+// 04. INSTALLATION MANAGEMENT
+// =====================================================
+
+Table installations {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  organization_id uuid [not null]
+
+  slug varchar(100) [not null, unique]
+  name varchar(150) [not null]
+
+  status installation_status [not null, default: 'pending']
+
+  requested_by_user_id uuid [not null]
+
+  started_at timestamptz
+  completed_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'A complete software environment provisioned for an organization'
+}
+
+Table installation_modules {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  installation_id uuid [not null]
+
+  module_key varchar(100) [not null]
+  module_version varchar(50) [not null]
+
+  status module_status [not null, default: 'pending']
+
+  is_required boolean [not null, default: false]
+
+  configuration jsonb
+
+  started_at timestamptz
+  completed_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (installation_id, module_key) [unique]
+  }
+
+  Note: 'Functional modules selected for an installation'
+}
+
+Table installation_phases {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  installation_module_id uuid [not null]
+
+  phase_key varchar(100) [not null]
+  sequence integer [not null]
+
+  status phase_status [not null, default: 'pending']
+
+  attempt_count integer [not null, default: 0]
+  max_attempts integer [not null, default: 5]
+
+  last_error_code varchar(100)
+  last_error_message text
+
+  started_at timestamptz
+  completed_at timestamptz
+  next_retry_at timestamptz
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (installation_module_id, phase_key) [unique]
+    (installation_module_id, sequence) [unique]
+  }
+
+  Note: 'Executable phases within a module installation'
+}
+
+Table managed_resources {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  installation_id uuid [not null]
+  installation_module_id uuid
+
+  resource_key varchar(150) [not null]
+  resource_type varchar(100) [not null]
+
+  provider varchar(100) [not null]
+  external_id varchar(255)
+
+  status resource_status [not null, default: 'planned']
+
+  metadata jsonb
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    (installation_id, resource_key) [unique]
+  }
+
+  Note: 'External resources managed by Nodexa, such as Incus containers'
+}
+
+// =====================================================
+// 05. EXECUTION & RELIABILITY
+// =====================================================
+
+Table installation_events {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  installation_id uuid [not null]
+
+  installation_module_id uuid
+  installation_phase_id uuid
+  managed_resource_id uuid
+
+  event_type varchar(150) [not null]
+  severity event_severity [not null, default: 'info']
+
+  message text
+  payload jsonb
+
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Append-only operational history of an installation'
+}
+
+Table outbox_events {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  aggregate_type varchar(100) [not null]
+  aggregate_id uuid [not null]
+
+  event_type varchar(150) [not null]
+  payload jsonb [not null]
+
+  status outbox_status [not null, default: 'pending']
+
+  attempts integer [not null, default: 0]
+
+  created_at timestamptz [not null, default: `now()`]
+  published_at timestamptz
+
+  indexes {
+    (status, created_at)
+  }
+
+  Note: 'Transactional outbox for reliable asynchronous processing'
+}
+
+Table idempotency_keys {
+  id uuid [pk, default: `gen_random_uuid()`]
+
+  user_id uuid [not null]
+
+  operation varchar(150) [not null]
+  key varchar(255) [not null]
+
+  request_hash varchar(64) [not null]
+
+  resource_id uuid
+  response_status integer
+  response_body jsonb
+
+  created_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz [not null]
+
+  indexes {
+    (user_id, operation, key) [unique]
+    (expires_at)
+  }
+
+  Note: 'Prevents duplicate operations when clients retry requests'
+}
+
+// =====================================================
+// RELATIONSHIPS
+// =====================================================
+
+// Identity
+
+Ref: user_credentials.user_id - users.id
+Ref: user_identities.user_id > users.id
+Ref: user_sessions.user_id > users.id
+Ref: password_reset_tokens.user_id > users.id
+Ref: email_verification_tokens.user_id > users.id
+
+// Authorization
+
+Ref: role_permissions.role_id > roles.id
+Ref: role_permissions.permission_id > permissions.id
+
+Ref: user_platform_roles.user_id > users.id
+Ref: user_platform_roles.role_id > roles.id
+Ref: user_platform_roles.assigned_by_user_id > users.id
+
+// Organizations
+
+Ref: organization_members.organization_id > organizations.id
+Ref: organization_members.user_id > users.id
+Ref: organization_members.role_id > roles.id
+
+Ref: invitations.organization_id > organizations.id
+Ref: invitations.role_id > roles.id
+Ref: invitations.invited_by_user_id > users.id
+
+// Installation management
+
+Ref: installations.organization_id > organizations.id
+Ref: installations.requested_by_user_id > users.id
+
+Ref: installation_modules.installation_id > installations.id
+
+Ref: installation_phases.installation_module_id > installation_modules.id
+
+Ref: managed_resources.installation_id > installations.id
+Ref: managed_resources.installation_module_id > installation_modules.id
+
+// Execution
+
+Ref: installation_events.installation_id > installations.id
+Ref: installation_events.installation_module_id > installation_modules.id
+Ref: installation_events.installation_phase_id > installation_phases.id
+Ref: installation_events.managed_resource_id > managed_resources.id
+
+Ref: idempotency_keys.user_id > users.id
