@@ -91,9 +91,11 @@ Enum event_severity {
 // =====================================================
 // 01. IDENTITY & AUTHENTICATION
 // =====================================================
+// Implemented by the current TypeORM entities and initial migration.
+// UUID defaults use uuid_generate_v4(), provided by the uuid-ossp extension.
 
 Table users {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id uuid [pk, default: `uuid_generate_v4()`]
 
   email varchar(254) [not null]
   normalized_email varchar(254) [not null, unique]
@@ -116,7 +118,7 @@ Table users {
 }
 
 Table user_credentials {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id uuid [pk, default: `uuid_generate_v4()`]
   user_id uuid [not null, unique]
 
   password_hash text [not null]
@@ -129,7 +131,7 @@ Table user_credentials {
 }
 
 Table user_identities {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id uuid [pk, default: `uuid_generate_v4()`]
   user_id uuid [not null]
 
   provider identity_provider [not null]
@@ -139,13 +141,14 @@ Table user_identities {
 
   indexes {
     (provider, provider_subject) [unique]
+    (user_id, provider) [unique]
   }
 
   Note: 'External authentication identities such as Google'
 }
 
 Table user_sessions {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id uuid [pk, default: `uuid_generate_v4()`]
   user_id uuid [not null]
 
   token_hash varchar(255) [not null, unique]
@@ -156,6 +159,11 @@ Table user_sessions {
 
   user_agent text
   created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id)
+    (expires_at)
+  }
 
   Note: 'Individually revocable authenticated sessions'
 }
@@ -492,9 +500,9 @@ Table idempotency_keys {
 
 // Identity
 
-Ref: user_credentials.user_id - users.id
-Ref: user_identities.user_id > users.id
-Ref: user_sessions.user_id > users.id
+Ref: user_credentials.user_id - users.id [delete: cascade]
+Ref: user_identities.user_id > users.id [delete: cascade]
+Ref: user_sessions.user_id > users.id [delete: cascade]
 Ref: password_reset_tokens.user_id > users.id
 Ref: email_verification_tokens.user_id > users.id
 

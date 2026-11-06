@@ -25,6 +25,10 @@ un usuario. Las contraseñas nunca deben almacenarse en texto plano. El hash y
 la verificación de contraseñas utilizarán Argon2id mediante una implementación
 mantenida.
 
+La aplicación actual acepta únicamente los dominios de correo listados en
+`apps/api/src/modules/user/constants/email-domains.constants.ts`. El correo se
+recorta y se convierte a minúsculas antes de persistir su valor normalizado.
+
 El registro público no forma parte del flujo actual del producto. Las cuentas
 se crean mediante un proceso de invitación, pero el flujo de invitaciones está
 fuera del alcance de esta issue.
@@ -87,6 +91,11 @@ representación del token, la configuración de cookies y la estrategia CSRF
 siguen siendo decisiones de implementación para las issues de persistencia y
 sesiones.
 
+La capa de persistencia actual almacena un `token_hash` único, una fecha de
+expiración, fechas opcionales de último uso y revocación, el agente de usuario
+y el usuario propietario. Las claves foráneas de PostgreSQL utilizan
+`ON DELETE CASCADE`.
+
 ## Límite con la autorización
 
 La identidad y la autenticación están separadas de la autorización:
@@ -140,3 +149,4 @@ La persistencia y la lógica de aplicación deben conservar estos invariantes:
 
 - [Referencia del modelo de datos](../data-model/README.es.md)
 - [Referencia del contrato de identidad en inglés](./README.md)
+- [Flujo de migraciones de la API](../../../apps/api/README.es.md)

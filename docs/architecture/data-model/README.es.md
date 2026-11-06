@@ -7,6 +7,11 @@ El DBML es una referencia de diseño. No es una migración de base de datos ni
 significa que todas las tablas modeladas deban implementarse en el mismo
 milestone.
 
+La persistencia actual de Identity & Authentication se implementa mediante
+entidades TypeORM y la migración inicial ubicada en
+`apps/api/src/modules/database/migrations/`. El DBML describe el modelo
+completo del dominio, incluyendo áreas aplazadas intencionalmente.
+
 ## Archivos
 
 - [`nodexa.dbml`](./nodexa.dbml): modelo de datos actual.
@@ -52,6 +57,32 @@ El área de identidad establece las siguientes relaciones:
 Los métodos de autenticación pertenecen al mismo usuario interno. No
 representan cuentas diferentes de Nodexa.
 
+### Persistencia de identidad implementada
+
+La migración actual crea:
+
+- `users`;
+- `user_credentials`;
+- `user_identities`;
+- `user_sessions`;
+- los enums de PostgreSQL `user_status` e `identity_provider`;
+- la extensión `uuid-ossp`, requerida por `uuid_generate_v4()`.
+
+La implementación garantiza:
+
+- un correo normalizado por cuenta;
+- un único conjunto de credenciales locales por cuenta;
+- una identidad externa por proveedor para cada cuenta;
+- unicidad global de `(provider, provider_subject)`;
+- múltiples sesiones por cuenta;
+- hashes de token de sesión únicos;
+- eliminación en cascada desde la cuenta hacia sus identidades y sesiones.
+
+Los dominios de correo local permitidos están definidos intencionalmente por
+la política de la aplicación en
+`apps/api/src/modules/user/constants/email-domains.constants.ts`. No se
+infieren desde el DBML.
+
 ## Límite del milestone de identidad
 
 El milestone actual de Identity & Authentication cubre el modelo necesario
@@ -75,13 +106,37 @@ issue posterior las incluya explícitamente:
 - administración de instalaciones;
 - flujos de ejecución y confiabilidad.
 
+## Fuentes del esquema y flujo de migraciones
+
+Estos artefactos tienen responsabilidades diferentes:
+
+- `nodexa.dbml` es la referencia conceptual del modelo completo del dominio.
+- Las entidades TypeORM son el modelo de persistencia implementado para el
+  milestone actual.
+- Las migraciones TypeORM son el historial ejecutable y versionado de la base
+  de datos.
+
+El flujo operativo de migraciones pertenece a la
+[guía del workspace de la API](../../../apps/api/README.es.md). Este documento
+solo describe cómo se relacionan el DBML, las entidades y el historial de
+migraciones.
+
 ## Observaciones de revisión
 
-El DBML es una referencia de diseño que evoluciona. Los siguientes puntos
-requieren resolución antes de derivar entidades TypeORM y migraciones:
+El DBML es una referencia de diseño que evoluciona. Las entidades de identidad
+y la migración inicial establecen actualmente las siguientes decisiones de
+persistencia:
 
-- El modelo garantiza unicidad de `(provider, provider_subject)` para
-  identidades externas, pero no de `(user_id, provider)`.
+- Las identidades externas garantizan unicidad de
+  `(provider, provider_subject)` y `(user_id, provider)`.
+- Las sesiones pueden tener varias filas por usuario y tienen índices sobre
+  `user_id` y `expires_at`.
+- Las claves foráneas de identidad usan `ON DELETE CASCADE`.
+- Los UUID de identidad usan `uuid_generate_v4()` y requieren la extensión de
+  PostgreSQL `uuid-ossp`.
+
+Los siguientes puntos permanecen abiertos para issues posteriores:
+
 - Aún debe decidirse el alcance inicial de `email_verified_at`,
   `password_reset_tokens` y `email_verification_tokens`.
 - Debe definirse el significado de los estados `active`, `suspended` y
@@ -94,8 +149,6 @@ requieren resolución antes de derivar entidades TypeORM y migraciones:
   invitación y Google.
 - Deben definirse la retención y limpieza de sesiones, además de la
   representación de `token_hash`.
-- Deben revisarse el comportamiento de borrado de claves foráneas y las
-  restricciones o índices adicionales.
 
 Los cambios intencionales del modelo deben reflejarse en el DBML y en la
 documentación relacionada para mantener alineada la documentación con el

@@ -24,6 +24,10 @@ Local authentication is represented by `user_credentials` and belongs to one
 user. Passwords must never be stored in plaintext. Password hashing and
 verification use Argon2id through a maintained implementation.
 
+The current application accepts only the email domains listed in
+`apps/api/src/modules/user/constants/email-domains.constants.ts`. The email is
+trimmed and lowercased before its normalized value is persisted.
+
 Public registration is not part of the current product flow. Accounts are
 created through an invitation process, but the invitation workflow is outside
 the scope of this issue.
@@ -83,6 +87,10 @@ The exact session storage, cleanup policy, token representation, cookie
 configuration, and CSRF strategy remain implementation decisions for the
 relevant persistence and session issues.
 
+The current persistence layer stores a unique `token_hash`, an expiration
+timestamp, optional last-use and revocation timestamps, the user agent, and
+the owning user. PostgreSQL foreign keys use `ON DELETE CASCADE`.
+
 ## Authorization boundary
 
 Identity and authentication are separate from authorization:
@@ -136,3 +144,4 @@ Persistence and application logic must preserve these invariants:
 
 - [Data model reference](../data-model/README.md)
 - [Spanish identity contract reference](./README.es.md)
+- [API migration workflow](../../../apps/api/README.md)
