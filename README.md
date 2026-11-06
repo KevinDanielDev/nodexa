@@ -28,17 +28,22 @@ bun run test
 
 Follow the documentation in this order:
 
-1. [Data model](docs/architecture/data-model/README.md) — DBML reference and
-   modeled areas.
-2. [Identity contract](docs/architecture/identity/README.md) — identity and
+1. [PostgreSQL with Podman](infra/local/podman/postgres/README.md) — start the
+   local database environment.
+2. [API workspace](apps/api/README.md) — configure the API and run migrations.
+3. [Data model](docs/architecture/data-model/README.md) — DBML reference,
+   implemented identity schema, and modeled areas.
+4. [Identity contract](docs/architecture/identity/README.md) — identity and
    authentication boundaries.
 
 ## Development setup
 
-Prepare the local environment in the following order:
+Use the following guides in order:
 
-1. [PostgreSQL with Podman](infra/local/podman/postgres/README.md) — create
-   the local database environment before starting the application.
+1. [PostgreSQL with Podman](infra/local/podman/postgres/README.md) — local
+   database infrastructure.
+2. [API workspace](apps/api/README.md) — API configuration, migrations, and
+   runtime commands.
 
-Additional setup steps will be added here as more project infrastructure is
-introduced.
+Workspace-specific READMEs contain the operational instructions for each
+component.
