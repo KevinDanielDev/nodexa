@@ -21,6 +21,8 @@ import { UserModule } from './modules/user/user.module.js';
         POSTGRES_USER: z.string(),
         POSTGRES_PASSWORD: z.string(),
         DB_HOST: z.string().default('localhost'),
+        TEST_DATABASE_URL: z.string(),
+        RUN_DATABASE_TESTS: z.coerce.boolean().default(false),
       }),
     }),
     HealthModule,
