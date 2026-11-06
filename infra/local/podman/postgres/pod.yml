@@ -22,6 +22,10 @@ spec:
         - name: postgres-storage
           mountPath: /var/lib/postgresql
 
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+
       startupProbe:
         exec:
           command:
@@ -46,6 +50,10 @@ spec:
     - name: postgres-storage
       persistentVolumeClaim:
         claimName: nodexa-postgres-storage
+
+    - name: postgres-init
+      configMap:
+        name: nodexa-postgres-init
 
 ---
 apiVersion: v1
