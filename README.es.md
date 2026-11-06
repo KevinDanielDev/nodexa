@@ -36,6 +36,8 @@ Sigue la documentación en este orden:
    del DBML, esquema de identidad implementado y áreas modeladas.
 4. [Contrato de identidad](docs/architecture/identity/README.es.md) —
    límites de identidad y autenticación.
+5. [Workflows de CI](.github/workflows/) — quality gates, validación de
+   infraestructura PostgreSQL y pruebas de integración PostgreSQL.
 
 ## Configuración de desarrollo
 

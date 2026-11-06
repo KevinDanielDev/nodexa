@@ -1,0 +1,117 @@
+name: PostgreSQL Integration
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Run PostgreSQL migrations and integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes podman
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Create ephemeral PostgreSQL configuration
+        run: |
+          password="$(openssl rand -hex 24)"
+          cp infra/local/podman/postgres/secrets/secret.example.yml \
+            infra/local/podman/postgres/secrets/secret.yml
+          sed -i "s/POSTGRES_PASSWORD:.*/POSTGRES_PASSWORD: ${password}/" \
+            infra/local/podman/postgres/secrets/secret.yml
+
+          cp apps/api/.env.example apps/api/.env
+          sed -i \
+            -e 's/^NODE_ENV=.*/NODE_ENV=test/' \
+            -e 's/^POSTGRES_DB=.*/POSTGRES_DB=nodexa_test/' \
+            -e 's/^POSTGRES_USER=.*/POSTGRES_USER=svc_nodexa/' \
+            -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${password}/" \
+            -e 's/^DB_HOST=.*/DB_HOST=localhost/' \
+            -e "s#^TEST_DATABASE_URL=.*#TEST_DATABASE_URL=postgresql://svc_nodexa:${password}@localhost:5432/nodexa_test#" \
+            -e 's/^RUN_DATABASE_TESTS=.*/RUN_DATABASE_TESTS=true/' \
+            apps/api/.env
+
+      - name: Create Podman network
+        run: podman network exists nodexa-net || podman network create nodexa-net
+
+      - name: Start PostgreSQL
+        run: bun run podman-kube:up
+
+      - name: Wait for PostgreSQL and verify test database
+        run: |
+          container="$(podman ps --filter pod=nodexa-dev \
+            --filter name=postgres --format '{{.Names}}' | head -n 1)"
+          if [ -z "$container" ]; then
+            podman pod ps
+            podman ps -a --pod
+            exit 1
+          fi
+
+          for attempt in {1..30}; do
+            if podman exec "$container" \
+              pg_isready -U svc_nodexa -d nodexa_test; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              podman logs "$container"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          podman exec "$container" sh -c \
+            'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" \
+              -d "$POSTGRES_DB" -c "SELECT 1"'
+
+      - name: Run committed migrations against nodexa_test
+        run: bun run --cwd apps/api migration:run
+
+      - name: Run API tests with PostgreSQL integration enabled
+        run: bun run test
+
+      - name: Tear down PostgreSQL
+        if: always()
+        run: |
+          if bun run podman-kube:down-force; then
+            exit 0
+          fi
+
+          echo "::warning::Podman forced teardown returned a non-zero status; verifying resources."
+          if podman pod exists nodexa-dev ||
+            podman secret exists nodexa-postgres-secret ||
+            podman volume exists nodexa-postgres-storage; then
+            podman pod ps
+            podman ps -a --pod
+            podman secret ls
+            podman volume ls
+            exit 1
+          fi
+
+          echo "::warning::Podman reported a teardown anomaly, but no Nodexa resources remain."

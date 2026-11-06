@@ -35,6 +35,8 @@ Follow the documentation in this order:
    implemented identity schema, and modeled areas.
 4. [Identity contract](docs/architecture/identity/README.md) — identity and
    authentication boundaries.
+5. [CI workflows](.github/workflows/) — quality gates, PostgreSQL
+   infrastructure checks, and PostgreSQL integration tests.
 
 ## Development setup
 

@@ -33,8 +33,8 @@ jobs:
 
       - name: Create local Secret
         run: |
-          cp infra/local/podman/postgres/secret.example.yml \
-            infra/local/podman/postgres/secret.yml
+          cp infra/local/podman/postgres/secrets/secret.example.yml \
+            infra/local/podman/postgres/secrets/secret.yml
 
       - name: Check Podman network
         run: podman network ls

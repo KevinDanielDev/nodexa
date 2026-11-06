@@ -123,6 +123,8 @@ if (runDatabaseTests) {
   });
 
   afterAll(async () => {
-    await dataSource!.destroy();
+    if (dataSource?.isInitialized) {
+      await dataSource.destroy();
+    }
   });
 }

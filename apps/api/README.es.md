@@ -48,19 +48,35 @@ bun run --cwd apps/api test
 
 Las pruebas de integración de persistencia verifican restricciones específicas
 de PostgreSQL para correos normalizados, credenciales, identidades externas y
-sesiones. Son optativas hasta que se incorpore el entorno dedicado de pruebas:
+sesiones. Se controlan mediante el entorno local de la API:
 
-```bash
-RUN_DATABASE_TESTS=true \
-TEST_DATABASE_URL=postgresql://user:password@localhost:5432/nodexa_test \
-bun run --cwd apps/api test
+Vitest carga `apps/api/.env` antes de la suite mediante
+`test/setup/load-env.ts`. Define `RUN_DATABASE_TESTS=true` y proporciona un
+`TEST_DATABASE_URL` válido en ese archivo para ejecutar las pruebas de
+integración PostgreSQL. Si la bandera no está habilitada, solo se ejecutan las
+pruebas unitarias y las de integración se omiten:
+
+```env
+RUN_DATABASE_TESTS=true
+TEST_DATABASE_URL=postgresql://svc_nodexa:tu_password@localhost:5432/nodexa_test
 ```
 
 La suite de integración ejecuta las migraciones commiteadas, limpia sus
-registros entre casos y no utiliza la base de desarrollo, salvo que
-`TEST_DATABASE_URL` se configure incorrectamente. La base PostgreSQL dedicada
-para pruebas y su workflow de CI pertenecen a una issue separada de esta
-integración inicial de base de datos.
+registros entre casos y debe apuntar a `nodexa_test`, nunca a la base de
+desarrollo. El workflow de integración PostgreSQL crea una configuración
+efímera, ejecuta las migraciones y las pruebas, y elimina todos los recursos
+incluso cuando falla un paso. CI genera una contraseña temporal en el runner de
+GitHub, crea un `apps/api/.env` temporal y descarta ambos junto con los
+recursos de PostgreSQL al finalizar el job.
+
+El repositorio separa las responsabilidades de CI:
+
+- `Quality Gates` ejecuta build, lint, type-check y el comando normal de tests.
+- `PostgreSQL Infrastructure` verifica el entorno local de PostgreSQL con
+  Podman.
+- `PostgreSQL Integration` crea una `nodexa_test` efímera, aplica las
+  migraciones commiteadas, ejecuta todos los tests con integración habilitada y
+  elimina los recursos.
 
 ## Configuración local
 
@@ -73,6 +89,11 @@ cp apps/api/.env.example apps/api/.env
 Configura `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD` y `DB_HOST` de acuerdo con el PostgreSQL local. El archivo
 `.env` es local y no debe committearse.
+
+Para las pruebas locales de integración, configura también
+`TEST_DATABASE_URL` y `RUN_DATABASE_TESTS` en el mismo archivo `.env`. Las
+bases de desarrollo y pruebas pueden utilizar las mismas credenciales de
+PostgreSQL, pero `TEST_DATABASE_URL` siempre debe seleccionar `nodexa_test`.
 
 La aplicación valida únicamente los dominios de correo definidos por la
 política actual de identidad. Esa lista se mantiene en

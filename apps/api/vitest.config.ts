@@ -9,5 +9,6 @@ export default defineConfig({
     root: './',
     include: ['**/*.spec.ts'],
     passWithNoTests: true,
+    setupFiles: ['./test/setup/load-env.ts'],
   },
 });
