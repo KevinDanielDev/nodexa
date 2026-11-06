@@ -48,19 +48,33 @@ bun run --cwd apps/api test
 
 The persistence integration tests verify PostgreSQL-specific constraints for
 normalized emails, credentials, external identities, and sessions. They are
-opt-in until the dedicated test database environment is introduced:
+controlled by the local API environment:
 
-```bash
-RUN_DATABASE_TESTS=true \
-TEST_DATABASE_URL=postgresql://user:password@localhost:5432/nodexa_test \
-bun run --cwd apps/api test
+Vitest loads `apps/api/.env` before the test suite through
+`test/setup/load-env.ts`. Set `RUN_DATABASE_TESTS=true` and provide a valid
+`TEST_DATABASE_URL` in that file to run the PostgreSQL integration tests. If
+the flag is not enabled, only the unit tests run and the integration tests are
+skipped:
+
+```env
+RUN_DATABASE_TESTS=true
+TEST_DATABASE_URL=postgresql://svc_nodexa:your_password@localhost:5432/nodexa_test
 ```
 
 The integration suite runs the committed migrations, clears its test records
-between cases, and never uses the development database unless
-`TEST_DATABASE_URL` is configured incorrectly. The dedicated PostgreSQL test
-database and its CI workflow are tracked separately from this initial database
-integration issue.
+between cases, and must point to `nodexa_test`, never the development database.
+The PostgreSQL integration workflow creates an ephemeral database configuration,
+runs the migrations and tests, and removes all resources even when a step fails.
+CI generates a temporary password on the GitHub runner, creates a temporary
+`apps/api/.env`, and discards both with the PostgreSQL resources after the job.
+
+The repository has separate CI responsibilities:
+
+- `Quality Gates` runs build, lint, type-check, and the regular test command.
+- `PostgreSQL Infrastructure` verifies the local Podman PostgreSQL environment.
+- `PostgreSQL Integration` creates an ephemeral `nodexa_test`, applies the
+  committed migrations, runs all tests with integration enabled, and tears down
+  the resources.
 
 ## Local configuration
 
@@ -73,6 +87,11 @@ cp apps/api/.env.example apps/api/.env
 Set `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
 `DB_HOST` to match the local PostgreSQL environment. The `.env` file is local
 and must not be committed.
+
+For local integration tests, also set `TEST_DATABASE_URL` and
+`RUN_DATABASE_TESTS` in the same `.env` file. The development and test
+databases may use the same PostgreSQL credentials, but `TEST_DATABASE_URL`
+must always select `nodexa_test`.
 
 ## Database migrations
 

@@ -10,8 +10,8 @@ Podman runs a `nodexa-dev` Pod connected to the `nodexa-net` network.
 Create the local Secret before the first startup:
 
 ```bash
-cp infra/local/podman/postgres/secret.example.yml \
-  infra/local/podman/postgres/secret.yml
+cp infra/local/podman/postgres/secrets/secret.example.yml \
+  infra/local/podman/postgres/secrets/secret.yml
 ```
 
 Change the example password in `secret.yml` if needed. The file is ignored by
@@ -55,10 +55,20 @@ The Pod should report `Running`, and the PostgreSQL container should report
 when the environment is recreated.
 
 The Pod definition uses a ConfigMap for non-sensitive PostgreSQL settings and
-a local Secret for the password. The startup and liveness probes run
+a second ConfigMap to provide the one-time initialization SQL without a host
+directory bind mount. This avoids host filesystem permission and SELinux label
+issues inside the container. A local Secret provides the password. The startup
+and liveness probes run
 `pg_isready` with the `POSTGRES_USER` and `POSTGRES_DB` values injected by
 `envFrom`. The probes verify PostgreSQL readiness, while an authenticated
 client connection is a separate validation.
+
+The initialization SQL runs only when PostgreSQL creates a new data directory.
+It creates the separate `nodexa_test` database in the same PostgreSQL server;
+the database uses the server credentials from the local Secret.
+After changing the Pod definition, recreate the Pod with
+`bun run podman-kube:down && bun run podman-kube:up`; an existing persistent
+volume will not rerun initialization scripts.
 
 ## Podman 5.8.9 cleanup note
 
