@@ -9,6 +9,7 @@ import { User } from '../user/entities/user.entity.js';
 import { UserSession } from '../user/entities/user-session.entity.js';
 import { UserIdentity } from '../user/entities/user-identity.entity.js';
 import { UserCredential } from '../user/entities/user-credential.entity.js';
+import { SeedOperation } from '../seed/entities/seed-operation.entity.js';
 
 // Consistency in ESM (ECMAScript Modules)
 const __filename = fileURLToPath(import.meta.url);
@@ -22,7 +23,7 @@ const AppDataSource: DataSource = new DataSource({
   username: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB,
-  entities: [User, UserCredential, UserIdentity, UserSession], // Refactor: 'src/modules/**/entities/*.entity.{ts,js}' to avoid adding new entities manually
+  entities: [User, UserCredential, UserIdentity, UserSession, SeedOperation], // Refactor: 'src/modules/**/entities/*.entity.{ts,js}' to avoid adding new entities manually
   migrations: [__dirname + '/migrations/*.{ts,js}'],
   migrationsTableName: 'migrations',
   migrationsTransactionMode: 'all',

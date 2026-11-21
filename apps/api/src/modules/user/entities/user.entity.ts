@@ -7,12 +7,13 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
-import { EUserStatus } from '../enums/index.js';
-import { EMAILS_DOMAINS } from '../constants/email-domains.constants.js';
-import { UserCredential } from './user-credential.entity.js';
-import { UserIdentity } from './user-identity.entity.js';
+
 import { UserSession } from './user-session.entity.js';
-import { UnprocessableEntityException } from '@nestjs/common';
+import { UserIdentity } from './user-identity.entity.js';
+import { UserCredential } from './user-credential.entity.js';
+
+import { EUserStatus } from '../enums/index.js';
+import { normalizedEmail } from '../../common/utils/normalizedEmail.js';
 
 // Indexes
 @Entity('users')
@@ -144,21 +145,13 @@ export class User {
   // Prepare Data Before Insert
   @BeforeInsert()
   prepareDataBeforeInsert() {
-    this.prepareNormalizedEmail(this.email);
+    this.normalizedEmail = normalizedEmail(this.email);
+    this.email = this.normalizedEmail;
     this.prepareDisplayName(this.firstName, this.lastName);
+    this.avatarUrl = this.avatarUrl || null;
   }
 
   // Private Methods
-  private prepareNormalizedEmail(email: string): void {
-    const normalizedEmail = email.trim().toLowerCase();
-    const domain = email.split('@').at(-1)?.toLowerCase();
-
-    if (!domain || !EMAILS_DOMAINS.includes(domain))
-      throw new UnprocessableEntityException('Email domain is not allowed');
-
-    this.normalizedEmail = normalizedEmail;
-  }
-
   private prepareDisplayName(firstName: string, lastName: string): void {
     this.displayName = `${firstName} ${lastName}`.trim();
   }
