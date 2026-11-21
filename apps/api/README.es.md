@@ -21,7 +21,9 @@ bun run --cwd apps/api test
 bun run --cwd apps/api test:e2e
 ```
 
-La API expone inicialmente `GET /health` como endpoint de verificación.
+La API expone `GET /health` como verificación y actualmente incluye endpoints
+internos de cuentas, vinculación de identidades y carga de usuarios. Los flujos
+de autenticación y la emisión de JWT están fuera de este milestone.
 
 ## Pruebas
 
@@ -33,14 +35,19 @@ test/
 ├── unit/
 │   └── modules/
 │       ├── database/migrations/
-│       └── user/entities/
-└── integration/
+│       ├── identities/
+│       ├── seed/
+│       └── user/
+├── integration/
     └── modules/user/
+└── e2e/
+    └── identity.e2e-spec.ts
 ```
 
-Las pruebas unitarias verifican el comportamiento de las entidades, los
-metadatos de TypeORM, la estructura de la migración, sus restricciones,
-índices y reversibilidad. No requieren PostgreSQL:
+Las pruebas unitarias verifican el comportamiento de las entidades, las reglas
+de los servicios, la idempotencia del seed, los metadatos de TypeORM, la
+estructura de las migraciones, sus restricciones, índices y reversibilidad. No
+requieren PostgreSQL:
 
 ```bash
 bun run --cwd apps/api test
@@ -61,9 +68,11 @@ RUN_DATABASE_TESTS=true
 TEST_DATABASE_URL=postgresql://svc_nodexa:tu_password@localhost:5432/nodexa_test
 ```
 
-La suite de integración ejecuta las migraciones commiteadas, limpia sus
-registros entre casos y debe apuntar a `nodexa_test`, nunca a la base de
-desarrollo. El workflow de integración PostgreSQL crea una configuración
+La suite de integración ejecuta todas las migraciones commiteadas, incluyendo
+`SeedOperations1794415254760`, limpia sus registros entre casos y debe apuntar
+a `nodexa_test`, nunca a la base de desarrollo. Verifica creación de cuentas,
+invariantes de métodos de autenticación, unicidad de identidades, unlinking,
+idempotencia del seed y cascadas de PostgreSQL. El workflow de integración PostgreSQL crea una configuración
 efímera, ejecuta las migraciones y las pruebas, y elimina todos los recursos
 incluso cuando falla un paso. CI genera una contraseña temporal en el runner de
 GitHub, crea un `apps/api/.env` temporal y descarta ambos junto con los
@@ -75,8 +84,26 @@ El repositorio separa las responsabilidades de CI:
 - `PostgreSQL Infrastructure` verifica el entorno local de PostgreSQL con
   Podman.
 - `PostgreSQL Integration` crea una `nodexa_test` efímera, aplica las
-  migraciones commiteadas, ejecuta todos los tests con integración habilitada y
-  elimina los recursos.
+  migraciones commiteadas, ejecuta los tests unitarios y de integración con la
+  base habilitada, ejecuta la suite HTTP end-to-end y elimina los recursos. El
+  workflow debe fallar si no puede conectarse a la base de pruebas; omitir los
+  tests de base de datos no se considera cobertura.
+
+## Endpoints HTTP
+
+Los endpoints internos actuales son:
+
+- `GET /health` — verificación de salud.
+- `POST /user/create` — crea una cuenta interna con credencial, identidad
+  externa o ambas. Requiere al menos un método de autenticación.
+- `POST /identities/link` — vincula una identidad de proveedor a una cuenta.
+- `DELETE /identities/unlink` — elimina una identidad solo si permanece otro
+  método de autenticación.
+- `POST /seed/users` — carga el seed determinista y es idempotente mediante un
+  hash del contenido.
+
+La validación se aplica globalmente mediante `ValidationPipe` y los conflictos
+de base de datos se traducen mediante el filtro global de excepciones.
 
 ## Configuración local
 
@@ -90,7 +117,7 @@ Configura `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD` y `DB_HOST` de acuerdo con el PostgreSQL local. El archivo
 `.env` es local y no debe committearse.
 
-Para las pruebas locales de integración, configura también
+Para las pruebas locales de integración y end-to-end, configura también
 `TEST_DATABASE_URL` y `RUN_DATABASE_TESTS` en el mismo archivo `.env`. Las
 bases de desarrollo y pruebas pueden utilizar las mismas credenciales de
 PostgreSQL, pero `TEST_DATABASE_URL` siempre debe seleccionar `nodexa_test`.
@@ -136,6 +163,11 @@ El CLI utiliza `src/modules/database/data-source.ts` después de compilar la
 API. El `DataSource` registra explícitamente las entidades y migraciones, y
 carga las variables de entorno de forma independiente al contenedor de Nest.
 
+La tabla `seed_operations` almacena la clave basada en el contenido, recurso,
+estado, metadatos y fecha de finalización de cada seed. Una ejecución repetida
+con el mismo contenido completado no inserta usuarios duplicados y las
+operaciones fallidas pueden reintentarse.
+
 ## Estructura
 
 ```text
@@ -148,6 +180,9 @@ src/
     │   ├── database.module.ts
     │   └── migrations/
     ├── health/
+    ├── common/
+    ├── identities/
+    ├── seed/
     └── user/
         ├── entities/
         ├── enums/

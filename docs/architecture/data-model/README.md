@@ -47,6 +47,7 @@ The identity area establishes these relationships:
 - `user_credentials` stores local password credentials for a user.
 - `user_identities` stores external provider identities linked to a user.
 - `user_sessions` stores server-managed sessions belonging to a user.
+- `seed_operations` stores the status and content key of idempotent seed runs.
 - Password reset and email verification tokens are modeled separately from
   credentials and sessions.
 
@@ -74,20 +75,28 @@ The implementation enforces:
 - unique session token hashes;
 - cascading deletion from an account to its identity records and sessions.
 
+The current seed migration creates `seed_operations` with a unique content key,
+resource, status, JSON metadata, and optional completion timestamp. It is an
+operational reliability table and does not belong to a user account.
+
 The allowed local email domains are intentionally defined by the application
 policy in `apps/api/src/modules/user/constants/email-domains.constants.ts`.
 They are not inferred from the DBML.
 
 ## Identity milestone boundary
 
-The current Identity & Authentication milestone covers the model needed for:
+The current Identity & Authentication milestone covers the model and account
+core needed for:
 
 - internal user accounts;
 - local credentials;
 - Google external identities;
-- server-managed sessions;
-- account status and suspension;
-- the persistence layer and authentication contracts.
+- the persistence model for server-managed sessions;
+- account status persistence;
+- account, identity-linking, seed, and persistence tests.
+
+Suspension behavior, session revocation, and authentication flows remain outside
+this issue even though their future persistence model is represented here.
 
 The following modeled areas are outside this milestone unless a later issue
 explicitly includes them:

@@ -51,6 +51,8 @@ El área de identidad establece las siguientes relaciones:
   un usuario.
 - `user_sessions` almacena sesiones administradas por el servidor que
   pertenecen a un usuario.
+- `seed_operations` almacena el estado y la clave de contenido de las
+  ejecuciones idempotentes del seed.
 - Los tokens de recuperación de contraseña y verificación de correo se modelan
   separadamente de las credenciales y las sesiones.
 
@@ -78,6 +80,10 @@ La implementación garantiza:
 - hashes de token de sesión únicos;
 - eliminación en cascada desde la cuenta hacia sus identidades y sesiones.
 
+La migración actual del seed crea `seed_operations` con una clave de contenido
+única, recurso, estado, metadatos JSON y fecha de finalización opcional. Es una
+tabla operacional de confiabilidad y no pertenece a una cuenta de usuario.
+
 Los dominios de correo local permitidos están definidos intencionalmente por
 la política de la aplicación en
 `apps/api/src/modules/user/constants/email-domains.constants.ts`. No se
@@ -85,15 +91,19 @@ infieren desde el DBML.
 
 ## Límite del milestone de identidad
 
-El milestone actual de Identity & Authentication cubre el modelo necesario
-para:
+El milestone actual de Identity & Authentication cubre el modelo y el núcleo de
+cuentas necesario para:
 
 - cuentas internas de usuario;
 - credenciales locales;
 - identidades externas de Google;
-- sesiones administradas por el servidor;
-- estado y suspensión de cuentas;
-- capa de persistencia y contratos de autenticación.
+- el modelo de persistencia para sesiones administradas por el servidor;
+- la persistencia del estado de cuenta;
+- las pruebas de cuentas, linking, seed y persistencia.
+
+El comportamiento de suspensión, la revocación de sesiones y los flujos de
+autenticación permanecen fuera de esta issue aunque su modelo de persistencia
+futuro esté representado aquí.
 
 Las siguientes áreas modeladas están fuera de este milestone salvo que una
 issue posterior las incluya explícitamente:

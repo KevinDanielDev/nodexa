@@ -21,7 +21,9 @@ bun run --cwd apps/api test
 bun run --cwd apps/api test:e2e
 ```
 
-The API exposes `GET /health` as its initial health check.
+The API exposes `GET /health` as a health check and currently includes internal
+account, identity-linking, and user-seeding endpoints. Authentication flows and
+JWT issuance are outside this milestone.
 
 ## Tests
 
@@ -33,14 +35,18 @@ test/
 ├── unit/
 │   └── modules/
 │       ├── database/migrations/
-│       └── user/entities/
-└── integration/
+│       ├── identities/
+│       ├── seed/
+│       └── user/
+├── integration/
     └── modules/user/
+└── e2e/
+    └── identity.e2e-spec.ts
 ```
 
-The unit tests verify entity behavior, TypeORM metadata, migration structure,
-constraints, indexes, and reversible migration definitions. They do not
-require PostgreSQL:
+The unit tests verify entity behavior, service rules, seed idempotency, TypeORM
+metadata, migration structure, constraints, indexes, and reversible migration
+definitions. They do not require PostgreSQL:
 
 ```bash
 bun run --cwd apps/api test
@@ -61,8 +67,11 @@ RUN_DATABASE_TESTS=true
 TEST_DATABASE_URL=postgresql://svc_nodexa:your_password@localhost:5432/nodexa_test
 ```
 
-The integration suite runs the committed migrations, clears its test records
-between cases, and must point to `nodexa_test`, never the development database.
+The integration suite runs all committed migrations, including
+`SeedOperations1794415254760`, clears its test records between cases, and must
+point to `nodexa_test`, never the development database. It verifies account
+creation, authentication-method invariants, identity uniqueness, unlinking,
+seed idempotency, and PostgreSQL cascades.
 The PostgreSQL integration workflow creates an ephemeral database configuration,
 runs the migrations and tests, and removes all resources even when a step fails.
 CI generates a temporary password on the GitHub runner, creates a temporary
@@ -73,8 +82,26 @@ The repository has separate CI responsibilities:
 - `Quality Gates` runs build, lint, type-check, and the regular test command.
 - `PostgreSQL Infrastructure` verifies the local Podman PostgreSQL environment.
 - `PostgreSQL Integration` creates an ephemeral `nodexa_test`, applies the
-  committed migrations, runs all tests with integration enabled, and tears down
-  the resources.
+  committed migrations, runs unit and PostgreSQL integration tests with
+  integration enabled, runs the HTTP end-to-end suite, and tears down the
+  resources. The integration workflow must fail if the test database cannot be
+  reached; skipped database tests are not considered coverage.
+
+## HTTP endpoints
+
+The current internal endpoints are:
+
+- `GET /health` — health check.
+- `POST /user/create` — creates an internal account with a credential, an
+  external identity, or both. At least one authentication method is required.
+- `POST /identities/link` — links one provider identity to an existing account.
+- `DELETE /identities/unlink` — removes an identity only when another
+  authentication method remains.
+- `POST /seed/users` — loads the deterministic user seed and is idempotent by
+  content hash.
+
+Validation is applied globally with `ValidationPipe`, and database conflicts
+are translated by the global exception filter.
 
 ## Local configuration
 
@@ -88,7 +115,7 @@ Set `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
 `DB_HOST` to match the local PostgreSQL environment. The `.env` file is local
 and must not be committed.
 
-For local integration tests, also set `TEST_DATABASE_URL` and
+For local integration and end-to-end tests, also set `TEST_DATABASE_URL` and
 `RUN_DATABASE_TESTS` in the same `.env` file. The development and test
 databases may use the same PostgreSQL credentials, but `TEST_DATABASE_URL`
 must always select `nodexa_test`.
@@ -130,6 +157,11 @@ The CLI uses `src/modules/database/data-source.ts` after the API build. The
 DataSource explicitly registers the entities and migration files and loads
 environment variables independently from the Nest application.
 
+The `seed_operations` table stores the content-hash key, resource, status,
+metadata, and completion timestamp for idempotent seed executions. A repeated
+seed with the same completed content returns without inserting duplicate users;
+failed operations can be retried.
+
 ## Structure
 
 ```text
@@ -142,6 +174,9 @@ src/
     │   ├── database.module.ts
     │   └── migrations/
     ├── health/
+    ├── common/
+    ├── identities/
+    ├── seed/
     └── user/
         ├── entities/
         ├── enums/

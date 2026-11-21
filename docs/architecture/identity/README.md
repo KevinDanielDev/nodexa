@@ -106,15 +106,19 @@ for those future capabilities.
 
 ## Milestone boundaries
 
-This identity contract supports the current Identity & Authentication
-milestone:
+The current Identity & Authentication milestone implements the account and
+authentication-method core:
 
 - internal user accounts;
 - local credentials;
 - Google identities;
-- server-managed sessions;
-- account status and suspension;
-- authentication contracts and their tests.
+- the persistence model for server-managed sessions;
+- account status persistence;
+- account, identity-linking, seed, and persistence tests.
+
+Suspension behavior, session revocation, and authentication flows are not
+implemented in this issue. The `suspended` and `disabled` statuses remain part
+of the model contract for future authentication/session work.
 
 The following remain outside this issue and are not implied by this contract:
 
