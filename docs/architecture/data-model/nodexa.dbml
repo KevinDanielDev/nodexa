@@ -88,6 +88,13 @@ Enum event_severity {
   critical
 }
 
+Enum seed_operation_status {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
 // =====================================================
 // 01. IDENTITY & AUTHENTICATION
 // =====================================================
@@ -492,6 +499,20 @@ Table idempotency_keys {
   }
 
   Note: 'Prevents duplicate operations when clients retry requests'
+}
+
+Table seed_operations {
+  id uuid [pk, default: `uuid_generate_v4()`]
+
+  key text [not null, unique]
+  resource varchar(150) [not null]
+  status seed_operation_status [not null, default: 'PENDING']
+  metadata jsonb
+
+  created_at timestamptz [not null, default: `now()`]
+  completed_at timestamptz
+
+  Note: 'Tracks idempotent data seed operations and their result'
 }
 
 // =====================================================

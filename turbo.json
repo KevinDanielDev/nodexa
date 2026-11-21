@@ -13,7 +13,10 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
-    "test": {},
+    "test": {
+      "cache": false,
+      "env": ["REQUIRE_DATABASE_TESTS"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -111,15 +111,20 @@ de usuario estable para esas capacidades futuras.
 
 ## Límites del milestone
 
-Este contrato de identidad soporta el milestone actual de Identity &
-Authentication:
+El milestone actual de Identity & Authentication implementa el núcleo de
+cuentas y métodos de autenticación:
 
 - cuentas internas de usuario;
 - credenciales locales;
 - identidades de Google;
-- sesiones administradas por el servidor;
-- estado y suspensión de cuentas;
-- contratos de autenticación y sus pruebas.
+- el modelo de persistencia para sesiones administradas por el servidor;
+- la persistencia del estado de cuenta;
+- las pruebas de cuentas, linking, seed y persistencia.
+
+El comportamiento de suspensión, la revocación de sesiones y los flujos de
+autenticación no se implementan en esta issue. Los estados `suspended` y
+`disabled` permanecen como parte del contrato del modelo para futuras issues de
+autenticación y sesiones.
 
 Lo siguiente permanece fuera de esta issue y no se deriva de este contrato:
 

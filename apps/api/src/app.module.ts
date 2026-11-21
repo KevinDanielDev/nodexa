@@ -1,11 +1,15 @@
+import { z } from 'zod';
+
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { HealthModule } from './modules/health/health.module.js';
 import { DatabaseModule } from './modules/database/database.module.js';
 
-import { z } from 'zod';
 import { UserModule } from './modules/user/user.module.js';
+import { SeedModule } from './modules/seed/seed.module.js';
+import { IdentitiesModule } from './modules/identities/identities.module.js';
+import { GLOBAL_EXCEPTION_FILTER_PROVIDER } from './modules/common/providers/global-exception.provider.js';
 
 @Module({
   imports: [
@@ -21,15 +25,17 @@ import { UserModule } from './modules/user/user.module.js';
         POSTGRES_USER: z.string(),
         POSTGRES_PASSWORD: z.string(),
         DB_HOST: z.string().default('localhost'),
-        TEST_DATABASE_URL: z.string(),
+        TEST_DATABASE_URL: z.string().optional(),
         RUN_DATABASE_TESTS: z.coerce.boolean().default(false),
       }),
     }),
     HealthModule,
     DatabaseModule,
     UserModule,
+    SeedModule,
+    IdentitiesModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [GLOBAL_EXCEPTION_FILTER_PROVIDER],
 })
 export class AppModule {}

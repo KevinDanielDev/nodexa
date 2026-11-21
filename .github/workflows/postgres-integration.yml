@@ -88,13 +88,16 @@ jobs:
 
           podman exec "$container" sh -c \
             'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" \
-              -d "$POSTGRES_DB" -c "SELECT 1"'
+              -d nodexa_test -c "SELECT current_database() = '\''nodexa_test'\''"'
 
       - name: Run committed migrations against nodexa_test
         run: bun run --cwd apps/api migration:run
 
       - name: Run API tests with PostgreSQL integration enabled
-        run: bun run test
+        run: REQUIRE_DATABASE_TESTS=true bun run --cwd apps/api test
+
+      - name: Run API end-to-end tests with PostgreSQL integration enabled
+        run: bun run --cwd apps/api test:e2e
 
       - name: Tear down PostgreSQL
         if: always()
