@@ -1,4 +1,5 @@
 import { UnprocessableEntityException } from '@nestjs/common';
+
 import { describe, expect, it } from 'vitest';
 
 import { User } from '../../../../../src/modules/user/entities/user.entity.js';
@@ -31,7 +32,7 @@ describe('User entity', () => {
     user.lastName = 'Lovelace';
 
     expect(() => runInsertHook(user)).toThrow(
-      new UnprocessableEntityException('Email domain is not allowed'),
+      new UnprocessableEntityException('Email domain is not allowed.'),
     );
   });
 
