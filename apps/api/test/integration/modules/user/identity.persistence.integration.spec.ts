@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { normalizedEmail } from '../../../../src/modules/common/utils/normalizedEmail.js';
+import { normalizedEmail } from '../../../../src/modules/common/utils/normalized-email.js';
+import { AuthService } from '../../../../src/modules/auth/auth.service.js';
 import { IdentitiesService } from '../../../../src/modules/identities/identities.service.js';
 import { InitialIdentity1793989414762 } from '../../../../src/modules/database/migrations/1793989414762-InitialIdentity.js';
 import { SeedOperations1794415254760 } from '../../../../src/modules/database/migrations/1794415254760-SeedOperations.js';
@@ -17,11 +18,15 @@ import {
   UserIdentity,
   UserSession,
 } from '../../../../src/modules/user/entities/index.js';
-import { EIdentityProvider, EUserStatus } from '../../../../src/modules/user/enums/index.js';
+import {
+  EIdentityProvider,
+  EUserStatus,
+} from '../../../../src/modules/user/enums/index.js';
 import { UserService } from '../../../../src/modules/user/user.service.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const runDatabaseTests = process.env.RUN_DATABASE_TESTS === 'true' && databaseUrl;
+const runDatabaseTests =
+  process.env.RUN_DATABASE_TESTS === 'true' && databaseUrl;
 
 if (process.env.REQUIRE_DATABASE_TESTS === 'true' && !runDatabaseTests)
   throw new Error(
@@ -32,13 +37,20 @@ const dataSource = runDatabaseTests
   ? new DataSource({
       type: 'postgres',
       url: databaseUrl,
-      entities: [User, UserCredential, UserIdentity, UserSession, SeedOperation],
+      entities: [
+        User,
+        UserCredential,
+        UserIdentity,
+        UserSession,
+        SeedOperation,
+      ],
       migrations: [InitialIdentity1793989414762, SeedOperations1794415254760],
       synchronize: false,
     })
   : undefined;
 
 let userService: UserService;
+let authService: AuthService;
 let identitiesService: IdentitiesService;
 let seedService: SeedService;
 
@@ -67,291 +79,407 @@ const usersSeedKey = (): string => {
     .digest('hex')}`;
 };
 
-describe.skipIf(!runDatabaseTests)('Identity persistence with PostgreSQL', () => {
-  it('enforces normalized email uniqueness', async () => {
-    const repository = dataSource!.getRepository(User);
-    const firstUser = await repository.save(createUser('same@gmail.com'));
+describe.skipIf(!runDatabaseTests)(
+  'Identity persistence with PostgreSQL',
+  () => {
+    it('enforces normalized email uniqueness', async () => {
+      const repository = dataSource!.getRepository(User);
+      const firstUser = await repository.save(createUser('same@gmail.com'));
 
-    await expect(repository.save(createUser('SAME@gmail.com'))).rejects.toThrow();
+      await expect(
+        repository.save(createUser('SAME@gmail.com')),
+      ).rejects.toThrow();
 
-    await repository.delete(firstUser.id);
-  });
-
-  it('allows multiple sessions while keeping token hashes unique', async () => {
-    const userRepository = dataSource!.getRepository(User);
-    const sessionRepository = dataSource!.getRepository(UserSession);
-    const user = await userRepository.save(createUser());
-
-    await sessionRepository.save([
-      {
-        userId: user.id,
-        tokenHash: `${randomUUID()}-one`,
-        expiresAt: new Date(Date.now() + 60_000),
-      },
-      {
-        userId: user.id,
-        tokenHash: `${randomUUID()}-two`,
-        expiresAt: new Date(Date.now() + 60_000),
-      },
-    ]);
-
-    expect(await sessionRepository.countBy({ userId: user.id })).toBe(2);
-    await expect(
-      sessionRepository.save({
-        userId: user.id,
-        tokenHash: 'duplicate-token-hash',
-        expiresAt: new Date(Date.now() + 60_000),
-      }),
-    ).resolves.toBeDefined();
-    await expect(
-      sessionRepository.save({
-        userId: user.id,
-        tokenHash: 'duplicate-token-hash',
-        expiresAt: new Date(Date.now() + 60_000),
-      }),
-    ).rejects.toThrow();
-  });
-
-  it('enforces one identity per provider and globally unique provider subjects', async () => {
-    const userRepository = dataSource!.getRepository(User);
-    const identityRepository = dataSource!.getRepository(UserIdentity);
-    const firstUser = await userRepository.save(createUser());
-    const secondUser = await userRepository.save(createUser());
-
-    await identityRepository.save({
-      userId: firstUser.id,
-      provider: EIdentityProvider.GOOGLE,
-      providerSubject: 'google-subject',
+      await repository.delete(firstUser.id);
     });
 
-    await expect(
-      identityRepository.save({
+    it('allows multiple sessions while keeping token hashes unique', async () => {
+      const userRepository = dataSource!.getRepository(User);
+      const sessionRepository = dataSource!.getRepository(UserSession);
+      const user = await userRepository.save(createUser());
+
+      await sessionRepository.save([
+        {
+          userId: user.id,
+          tokenHash: `${randomUUID()}-one`,
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+        {
+          userId: user.id,
+          tokenHash: `${randomUUID()}-two`,
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      ]);
+
+      expect(await sessionRepository.countBy({ userId: user.id })).toBe(2);
+      await expect(
+        sessionRepository.save({
+          userId: user.id,
+          tokenHash: 'duplicate-token-hash',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      ).resolves.toBeDefined();
+      await expect(
+        sessionRepository.save({
+          userId: user.id,
+          tokenHash: 'duplicate-token-hash',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('enforces one identity per provider and globally unique provider subjects', async () => {
+      const userRepository = dataSource!.getRepository(User);
+      const identityRepository = dataSource!.getRepository(UserIdentity);
+      const firstUser = await userRepository.save(createUser());
+      const secondUser = await userRepository.save(createUser());
+
+      await identityRepository.save({
         userId: firstUser.id,
         provider: EIdentityProvider.GOOGLE,
-        providerSubject: 'another-subject',
-      }),
-    ).rejects.toThrow();
-
-    await expect(
-      identityRepository.save({
-        userId: secondUser.id,
-        provider: EIdentityProvider.GOOGLE,
         providerSubject: 'google-subject',
-      }),
-    ).rejects.toThrow();
-  });
+      });
 
-  it('supports local and external authentication independently', async () => {
-    const userRepository = dataSource!.getRepository(User);
-    const credentialRepository = dataSource!.getRepository(UserCredential);
-    const identityRepository = dataSource!.getRepository(UserIdentity);
-
-    const localUser = await userService.createUser({
-      user: {
-        email: `${randomUUID()}@gmail.com`,
-        firstName: 'Local',
-        lastName: 'User',
-      },
-      credential: { password: 'password123' },
-    });
-    const externalUser = await userService.createUser({
-      user: {
-        email: `${randomUUID()}@gmail.com`,
-        firstName: 'External',
-        lastName: 'User',
-      },
-      identities: [
-        {
+      await expect(
+        identityRepository.save({
+          userId: firstUser.id,
           provider: EIdentityProvider.GOOGLE,
-          providerSubject: randomUUID(),
+          providerSubject: 'another-subject',
+        }),
+      ).rejects.toThrow();
+
+      await expect(
+        identityRepository.save({
+          userId: secondUser.id,
+          provider: EIdentityProvider.GOOGLE,
+          providerSubject: 'google-subject',
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('supports local and external authentication independently', async () => {
+      const userRepository = dataSource!.getRepository(User);
+      const credentialRepository = dataSource!.getRepository(UserCredential);
+      const identityRepository = dataSource!.getRepository(UserIdentity);
+
+      const localUser = await userService.createUser({
+        user: {
+          email: `${randomUUID()}@gmail.com`,
+          firstName: 'Local',
+          lastName: 'User',
         },
-      ],
+        credential: { password: 'password123' },
+      });
+      const externalUser = await userService.createUser({
+        user: {
+          email: `${randomUUID()}@gmail.com`,
+          firstName: 'External',
+          lastName: 'User',
+        },
+        identities: [
+          {
+            provider: EIdentityProvider.GOOGLE,
+            providerSubject: randomUUID(),
+          },
+        ],
+      });
+
+      expect(await userRepository.count()).toBe(2);
+      expect(await credentialRepository.count()).toBe(1);
+      expect(await identityRepository.count()).toBe(1);
+      expect(localUser.user).not.toHaveProperty('email');
+      expect(externalUser.user).not.toHaveProperty('email');
     });
 
-    expect(await userRepository.count()).toBe(2);
-    expect(await credentialRepository.count()).toBe(1);
-    expect(await identityRepository.count()).toBe(1);
-    expect(localUser.user).not.toHaveProperty('email');
-    expect(externalUser.user).not.toHaveProperty('email');
-  });
+    it('authenticates a persisted local user and records lastLoginAt', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: { email, firstName: 'Local', lastName: 'User' },
+        credential: { password: 'password123' },
+      });
 
-  it('rejects linking a provider already used by the same user', async () => {
-    const user = await userRepositoryForTest().save(createUser());
-    await userIdentityRepositoryForTest().save({
-      userId: user.id,
-      provider: EIdentityProvider.GOOGLE,
-      providerSubject: 'existing-subject',
+      const persistedUser = await userRepositoryForTest().findOneBy({
+        normalizedEmail: email,
+      });
+      expect(persistedUser).not.toBeNull();
+
+      const response = await authService.login(
+        `  ${email.toUpperCase()}  `,
+        'password123',
+      );
+
+      expect(response).toMatchObject({
+        message: 'Login successful',
+        user: {
+          id: persistedUser!.id,
+          email,
+          status: EUserStatus.ACTIVE,
+        },
+      });
+      expect(response.user.lastLoginAt).toBeInstanceOf(Date);
+      expect(response.user).not.toHaveProperty('credential');
+      expect(response.user).not.toHaveProperty('passwordHash');
+
+      const updatedUser = await userRepositoryForTest().findOneBy({
+        id: persistedUser!.id,
+      });
+      expect(updatedUser?.lastLoginAt).toBeInstanceOf(Date);
     });
 
-    await expect(
-      identitiesService.linkIdentity({
+    it('does not update lastLoginAt after a failed persisted login', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: { email, firstName: 'Local', lastName: 'User' },
+        credential: { password: 'password123' },
+      });
+
+      const persistedUser = await userRepositoryForTest().findOneBy({
+        normalizedEmail: email,
+      });
+      expect(persistedUser).not.toBeNull();
+
+      await expect(
+        authService.login(email, 'wrong-password'),
+      ).rejects.toThrow('Invalid credentials, please try again');
+
+      const unchangedUser = await userRepositoryForTest().findOneBy({
+        id: persistedUser!.id,
+      });
+      expect(unchangedUser?.lastLoginAt).toBeNull();
+    });
+
+    it.each([EUserStatus.SUSPENDED, EUserStatus.DISABLED])(
+      'rejects a persisted %s account with the generic credentials message',
+      async (status) => {
+        const email = `${randomUUID()}@gmail.com`;
+        await userService.createUser({
+          user: { email, firstName: 'Blocked', lastName: 'User', status },
+          credential: { password: 'password123' },
+        });
+
+        await expect(
+          authService.login(email, 'password123'),
+        ).rejects.toThrow('Invalid credentials, please try again');
+        expect(await userCredentialRepositoryForTest().count()).toBe(1);
+
+        const persistedUser = await userRepositoryForTest().findOneBy({
+          normalizedEmail: email,
+        });
+        expect(persistedUser?.lastLoginAt).toBeNull();
+      },
+    );
+
+    it('does not create duplicate accounts or credentials after repeated login', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: { email, firstName: 'Repeated', lastName: 'Login' },
+        credential: { password: 'password123' },
+      });
+
+      await authService.login(email, 'password123');
+      await authService.login(email, 'password123');
+
+      expect(
+        await userRepositoryForTest().countBy({ normalizedEmail: email }),
+      ).toBe(1);
+      expect(await userCredentialRepositoryForTest().count()).toBe(1);
+    });
+
+    it('loads only the credential relation for local authentication lookups', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: { email, firstName: 'Selective', lastName: 'Relations' },
+        credential: { password: 'password123' },
+      });
+
+      const user = await userService.getUserByNormalizedEmail(email, {
+        credential: true,
+        identities: false,
+        sessions: false,
+      });
+
+      expect(user?.credential).toBeDefined();
+      expect(user?.identities).toBeUndefined();
+      expect(user?.sessions).toBeUndefined();
+    });
+
+    it('rejects linking a provider already used by the same user', async () => {
+      const user = await userRepositoryForTest().save(createUser());
+      await userIdentityRepositoryForTest().save({
         userId: user.id,
         provider: EIdentityProvider.GOOGLE,
-        providerSubject: 'another-subject',
-      }),
-    ).rejects.toThrow('User already has an identity for this provider');
-  });
+        providerSubject: 'existing-subject',
+      });
 
-  it('rejects linking a provider subject already used by another user', async () => {
-    const firstUser = await userRepositoryForTest().save(createUser());
-    const secondUser = await userRepositoryForTest().save(createUser());
-    await userIdentityRepositoryForTest().save({
-      userId: firstUser.id,
-      provider: EIdentityProvider.GOOGLE,
-      providerSubject: 'already-used-subject',
+      await expect(
+        identitiesService.linkIdentity({
+          userId: user.id,
+          provider: EIdentityProvider.GOOGLE,
+          providerSubject: 'another-subject',
+        }),
+      ).rejects.toThrow('User already has an identity for this provider');
     });
 
-    await expect(
-      identitiesService.linkIdentity({
-        userId: secondUser.id,
+    it('rejects linking a provider subject already used by another user', async () => {
+      const firstUser = await userRepositoryForTest().save(createUser());
+      const secondUser = await userRepositoryForTest().save(createUser());
+      await userIdentityRepositoryForTest().save({
+        userId: firstUser.id,
         provider: EIdentityProvider.GOOGLE,
         providerSubject: 'already-used-subject',
-      }),
-    ).rejects.toThrow(
-      'External identity is already linked to another user',
-    );
-  });
+      });
 
-  it('allows unlinking an identity while a credential remains', async () => {
-    const email = `${randomUUID()}@gmail.com`;
-    await userService.createUser({
-      user: {
-        email,
-        firstName: 'Linked',
-        lastName: 'User',
-      },
-      credential: { password: 'password123' },
-    });
-    const persistedUser = await userRepositoryForTest().findOneBy({
-      normalizedEmail: email,
-    });
-    expect(persistedUser).not.toBeNull();
-
-    await identitiesService.linkIdentity({
-      userId: persistedUser!.id,
-      provider: EIdentityProvider.GOOGLE,
-      providerSubject: randomUUID(),
+      await expect(
+        identitiesService.linkIdentity({
+          userId: secondUser.id,
+          provider: EIdentityProvider.GOOGLE,
+          providerSubject: 'already-used-subject',
+        }),
+      ).rejects.toThrow('External identity is already linked to another user');
     });
 
-    await expect(
-      identitiesService.unlinkIdentity({
+    it('allows unlinking an identity while a credential remains', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: {
+          email,
+          firstName: 'Linked',
+          lastName: 'User',
+        },
+        credential: { password: 'password123' },
+      });
+      const persistedUser = await userRepositoryForTest().findOneBy({
+        normalizedEmail: email,
+      });
+      expect(persistedUser).not.toBeNull();
+
+      await identitiesService.linkIdentity({
         userId: persistedUser!.id,
         provider: EIdentityProvider.GOOGLE,
-      }),
-    ).resolves.toMatchObject({ message: 'Identity unlinked successfully' });
-    expect(await userIdentityRepositoryForTest().count()).toBe(0);
-  });
+        providerSubject: randomUUID(),
+      });
 
-  it('rejects unlinking the only identity when no credential exists', async () => {
-    const email = `${randomUUID()}@gmail.com`;
-    await userService.createUser({
-      user: { email, firstName: 'External', lastName: 'User' },
-      identities: [
-        {
+      await expect(
+        identitiesService.unlinkIdentity({
+          userId: persistedUser!.id,
           provider: EIdentityProvider.GOOGLE,
-          providerSubject: randomUUID(),
-        },
-      ],
+        }),
+      ).resolves.toMatchObject({ message: 'Identity unlinked successfully' });
+      expect(await userIdentityRepositoryForTest().count()).toBe(0);
     });
-    const user = await userRepositoryForTest().findOneBy({
-      normalizedEmail: email,
-    });
-    expect(user).not.toBeNull();
 
-    await expect(
-      identitiesService.unlinkIdentity({
-        userId: user!.id,
+    it('rejects unlinking the only identity when no credential exists', async () => {
+      const email = `${randomUUID()}@gmail.com`;
+      await userService.createUser({
+        user: { email, firstName: 'External', lastName: 'User' },
+        identities: [
+          {
+            provider: EIdentityProvider.GOOGLE,
+            providerSubject: randomUUID(),
+          },
+        ],
+      });
+      const user = await userRepositoryForTest().findOneBy({
+        normalizedEmail: email,
+      });
+      expect(user).not.toBeNull();
+
+      await expect(
+        identitiesService.unlinkIdentity({
+          userId: user!.id,
+          provider: EIdentityProvider.GOOGLE,
+        }),
+      ).rejects.toThrow(
+        'Cannot unlink identity. User must retain an authentication method.',
+      );
+      expect(await userIdentityRepositoryForTest().count()).toBe(1);
+    });
+
+    it('cascades credentials and identities when deleting a user', async () => {
+      const user = await userRepositoryForTest().save(createUser());
+      await userCredentialRepositoryForTest().save({
+        userId: user.id,
+        passwordHash: 'hash',
+      });
+      await userIdentityRepositoryForTest().save({
+        userId: user.id,
         provider: EIdentityProvider.GOOGLE,
-      }),
-    ).rejects.toThrow(
-      'Cannot unlink identity. User must retain an authentication method.',
-    );
-    expect(await userIdentityRepositoryForTest().count()).toBe(1);
-  });
+        providerSubject: randomUUID(),
+      });
 
-  it('cascades credentials and identities when deleting a user', async () => {
-    const user = await userRepositoryForTest().save(createUser());
-    await userCredentialRepositoryForTest().save({
-      userId: user.id,
-      passwordHash: 'hash',
-    });
-    await userIdentityRepositoryForTest().save({
-      userId: user.id,
-      provider: EIdentityProvider.GOOGLE,
-      providerSubject: randomUUID(),
+      await userRepositoryForTest().remove(user);
+
+      expect(await userCredentialRepositoryForTest().count()).toBe(0);
+      expect(await userIdentityRepositoryForTest().count()).toBe(0);
     });
 
-    await userRepositoryForTest().remove(user);
+    it('runs the complete user seed and makes the second run idempotent', async () => {
+      const seedOperationRepository = dataSource!.getRepository(SeedOperation);
+      const firstResult = await seedService.insertUsers({
+        url: '/seed/users',
+      } as Request);
 
-    expect(await userCredentialRepositoryForTest().count()).toBe(0);
-    expect(await userIdentityRepositoryForTest().count()).toBe(0);
-  });
+      expect(firstResult).toBe('Users seeded successfully.');
+      expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
+      expect(await userCredentialRepositoryForTest().count()).toBe(
+        usersSeed.filter((seed) => seed.credential).length,
+      );
+      expect(await userIdentityRepositoryForTest().count()).toBe(
+        usersSeed.reduce((count, seed) => count + seed.identities.length, 0),
+      );
 
-  it('runs the complete user seed and makes the second run idempotent', async () => {
-    const seedOperationRepository = dataSource!.getRepository(SeedOperation);
-    const firstResult = await seedService.insertUsers({
-      url: '/seed/users',
-    } as Request);
+      const operation = await seedOperationRepository.findOneBy({
+        resource: '/seed/users',
+      });
+      expect(operation?.status).toBe('COMPLETED');
+      expect(operation?.metadata).toMatchObject({
+        usersCount: usersSeed.length,
+      });
 
-    expect(firstResult).toBe('Users seeded successfully.');
-    expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
-    expect(await userCredentialRepositoryForTest().count()).toBe(
-      usersSeed.filter((seed) => seed.credential).length,
-    );
-    expect(await userIdentityRepositoryForTest().count()).toBe(
-      usersSeed.reduce((count, seed) => count + seed.identities.length, 0),
-    );
-
-    const operation = await seedOperationRepository.findOneBy({
-      resource: '/seed/users',
-    });
-    expect(operation?.status).toBe('COMPLETED');
-    expect(operation?.metadata).toMatchObject({
-      usersCount: usersSeed.length,
-    });
-
-    await expect(
-      seedService.insertUsers({ url: '/seed/users' } as Request),
-    ).resolves.toBe('Users have already been seeded.');
-    expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
-  });
-
-  it('keeps concurrent seed requests idempotent', async () => {
-    const results = await Promise.all([
-      seedService.insertUsers({ url: '/seed/users' } as Request),
-      seedService.insertUsers({ url: '/seed/users' } as Request),
-    ]);
-
-    expect(results.sort()).toEqual([
-      'Users have already been seeded.',
-      'Users seeded successfully.',
-    ]);
-    expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
-    expect(await seedOperationRepositoryForTest().count()).toBe(1);
-  });
-
-  it('retries a previously failed seed operation', async () => {
-    await seedOperationRepositoryForTest().save({
-      key: usersSeedKey(),
-      resource: '/seed/users',
-      status: ESeedStatus.FAILED,
-      metadata: { error: 'previous failure' },
+      await expect(
+        seedService.insertUsers({ url: '/seed/users' } as Request),
+      ).resolves.toBe('Users have already been seeded.');
+      expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
     });
 
-    await expect(
-      seedService.insertUsers({ url: '/seed/users' } as Request),
-    ).resolves.toBe('Users seeded successfully.');
+    it('keeps concurrent seed requests idempotent', async () => {
+      const results = await Promise.all([
+        seedService.insertUsers({ url: '/seed/users' } as Request),
+        seedService.insertUsers({ url: '/seed/users' } as Request),
+      ]);
 
-    const operation = await seedOperationRepositoryForTest().findOneBy({
-      key: usersSeedKey(),
+      expect(results.sort()).toEqual([
+        'Users have already been seeded.',
+        'Users seeded successfully.',
+      ]);
+      expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
+      expect(await seedOperationRepositoryForTest().count()).toBe(1);
     });
-    expect(operation?.status).toBe(ESeedStatus.COMPLETED);
-    expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
-  });
-});
+
+    it('retries a previously failed seed operation', async () => {
+      await seedOperationRepositoryForTest().save({
+        key: usersSeedKey(),
+        resource: '/seed/users',
+        status: ESeedStatus.FAILED,
+        metadata: { error: 'previous failure' },
+      });
+
+      await expect(
+        seedService.insertUsers({ url: '/seed/users' } as Request),
+      ).resolves.toBe('Users seeded successfully.');
+
+      const operation = await seedOperationRepositoryForTest().findOneBy({
+        key: usersSeedKey(),
+      });
+      expect(operation?.status).toBe(ESeedStatus.COMPLETED);
+      expect(await userRepositoryForTest().count()).toBe(usersSeed.length);
+    });
+  },
+);
 
 const userRepositoryForTest = () => dataSource!.getRepository(User);
-const userIdentityRepositoryForTest = () => dataSource!.getRepository(UserIdentity);
+const userIdentityRepositoryForTest = () =>
+  dataSource!.getRepository(UserIdentity);
 const userCredentialRepositoryForTest = () =>
   dataSource!.getRepository(UserCredential);
 const seedOperationRepositoryForTest = () =>
@@ -376,6 +504,7 @@ if (runDatabaseTests) {
       userIdentityRepositoryForTest(),
       userCredentialRepositoryForTest(),
     );
+    authService = new AuthService(userService);
     identitiesService = new IdentitiesService(userService);
     seedService = new SeedService(
       dataSource!.getRepository(SeedOperation),

@@ -14,13 +14,18 @@ import { User } from './entities/user.entity.js';
 import { UserIdentity } from './entities/user-identity.entity.js';
 import { UserCredential } from './entities/user-credential.entity.js';
 
-import { passwordHash } from '../common/utils/passwordHash.js';
-import { normalizedEmail } from '../common/utils/normalizedEmail.js';
+import { passwordHash } from '../common/utils/password-hash.js';
+import { normalizedEmail } from '../common/utils/normalized-email.js';
 import { EIdentityProvider } from './enums/identity-provider.enum.js';
 import { TCreateUserResponse } from './types/create-user-response.type.js';
+import { TUserRelationsOptions } from './types/user-relations-options.type.js';
 
 @Injectable()
 export class UserService {
+  private readonly safeCredential: boolean = true;
+  private readonly safeIdentities: boolean = true;
+  private readonly safeSessions: boolean = true;
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -158,24 +163,59 @@ export class UserService {
     await this.userIdentityRepository.remove(identityToRemove);
   }
 
-  public async getUserByIdWithRelations(id: string): Promise<User | null> {
+  public async getUserByNormalizedEmail(
+    normalizedEmail: string,
+    {
+      credential: safeCredential = this.safeCredential,
+      identities: safeIdentities = this.safeIdentities,
+      sessions: safeSessions = this.safeSessions,
+    }: TUserRelationsOptions = {},
+  ): Promise<User | null> {
     const user = await this.userRepository.findOne({
-      where: { id },
+      where: { normalizedEmail },
       relations: {
-        credential: true,
-        identities: true,
-        sessions: true,
+        credential: safeCredential,
+        identities: safeIdentities,
+        sessions: safeSessions,
       },
     });
-
     if (!user) return null;
     return user;
   }
 
-  public async getUserByNormalizedEmail(
-    normalizedEmail: string,
+  public async updateUserLastLogin(
+    userId: string,
+    lastLoginAt: Date,
   ): Promise<User | null> {
-    const user = await this.userRepository.findOneBy({ normalizedEmail });
+    const user = await this.getUserByIdWithRelations(userId, {
+      credential: false,
+      identities: false,
+      sessions: false,
+    });
+    if (!user) return null;
+
+    this.userRepository.merge(user, { lastLoginAt });
+
+    return this.userRepository.save(user);
+  }
+
+  public async getUserByIdWithRelations(
+    id: string,
+    {
+      credential: safeCredential = this.safeCredential,
+      identities: safeIdentities = this.safeIdentities,
+      sessions: safeSessions = this.safeSessions,
+    }: TUserRelationsOptions = {},
+  ): Promise<User | null> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: {
+        credential: safeCredential,
+        identities: safeIdentities,
+        sessions: safeSessions,
+      },
+    });
+
     if (!user) return null;
     return user;
   }

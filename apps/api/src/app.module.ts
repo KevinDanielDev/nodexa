@@ -10,6 +10,7 @@ import { UserModule } from './modules/user/user.module.js';
 import { SeedModule } from './modules/seed/seed.module.js';
 import { IdentitiesModule } from './modules/identities/identities.module.js';
 import { GLOBAL_EXCEPTION_FILTER_PROVIDER } from './modules/common/providers/global-exception.provider.js';
+import { AuthModule } from './modules/auth/auth.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { GLOBAL_EXCEPTION_FILTER_PROVIDER } from './modules/common/providers/glo
     UserModule,
     SeedModule,
     IdentitiesModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [GLOBAL_EXCEPTION_FILTER_PROVIDER],

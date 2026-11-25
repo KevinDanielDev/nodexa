@@ -22,8 +22,10 @@ bun run --cwd apps/api test:e2e
 ```
 
 The API exposes `GET /health` as a health check and currently includes internal
-account, identity-linking, and user-seeding endpoints. Authentication flows and
-JWT issuance are outside this milestone.
+account, identity-linking, and user-seeding endpoints. Local credential
+authentication is implemented as an internal `AuthService`, but it is not
+exposed through an HTTP controller yet. JWT issuance, cookies, and
+server-managed sessions remain outside this implementation step.
 
 ## Tests
 
@@ -34,6 +36,8 @@ structure:
 test/
 ├── unit/
 │   └── modules/
+│       ├── auth/
+│       ├── common/
 │       ├── database/migrations/
 │       ├── identities/
 │       ├── seed/
@@ -44,12 +48,13 @@ test/
     └── identity.e2e-spec.ts
 ```
 
-The unit tests verify entity behavior, service rules, seed idempotency, TypeORM
-metadata, migration structure, constraints, indexes, and reversible migration
-definitions. They do not require PostgreSQL:
+The unit tests verify entity behavior, local authentication rules, password
+hash verification, relation-loading options, service rules, seed idempotency,
+TypeORM metadata, migration structure, constraints, indexes, and reversible
+migration definitions. They do not require PostgreSQL:
 
 ```bash
-bun run --cwd apps/api test
+RUN_DATABASE_TESTS=false bun run --cwd apps/api test
 ```
 
 The persistence integration tests verify PostgreSQL-specific constraints for
@@ -99,6 +104,20 @@ The current internal endpoints are:
   authentication method remains.
 - `POST /seed/users` — loads the deterministic user seed and is idempotent by
   content hash.
+
+## Local authentication boundary
+
+`AuthService.login()` validates local credentials for an existing account. It
+normalizes the email, loads only the credential relation required for
+verification, verifies the password with Argon2id, rejects missing or invalid
+credentials, blocks inactive or logically deleted accounts, updates
+`users.last_login_at` after successful authentication, and returns a sanitized
+user projection. All failed authentication paths use the same generic invalid
+credentials response, including inactive and logically deleted accounts.
+
+This service does not create a JWT, cookie, or persistent session. The HTTP
+authentication contract belongs to a later API issue, and session lifecycle
+belongs to the server-managed sessions issue.
 
 Validation is applied globally with `ValidationPipe`, and database conflicts
 are translated by the global exception filter.
@@ -175,6 +194,9 @@ src/
     │   └── migrations/
     ├── health/
     ├── common/
+    ├── auth/
+    │   ├── auth.module.ts
+    │   └── auth.service.ts
     ├── identities/
     ├── seed/
     └── user/

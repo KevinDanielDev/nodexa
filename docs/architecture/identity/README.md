@@ -32,6 +32,15 @@ Public registration is not part of the current product flow. Accounts are
 created through an invitation process, but the invitation workflow is outside
 the scope of this issue.
 
+The current local authentication service validates credentials for an existing
+account. It normalizes the email, loads only the credential relation needed for
+verification, rejects missing or invalid credentials, blocks inactive or
+logically deleted accounts, and updates `users.last_login_at` after successful
+authentication. It returns a sanitized user projection; it does not issue JWTs
+or create cookies or persistent sessions. All failed authentication paths use
+the same generic invalid credentials response, including inactive and
+logically deleted accounts.
+
 ### External identities
 
 External provider identities are represented by `user_identities`.
@@ -114,11 +123,14 @@ authentication-method core:
 - Google identities;
 - the persistence model for server-managed sessions;
 - account status persistence;
+- local credential verification through the internal `AuthService`;
+- successful-login tracking through `users.last_login_at`;
 - account, identity-linking, seed, and persistence tests.
 
-Suspension behavior, session revocation, and authentication flows are not
-implemented in this issue. The `suspended` and `disabled` statuses remain part
-of the model contract for future authentication/session work.
+HTTP authentication exposure, JWT issuance, cookie handling, session creation,
+and session revocation are not implemented in this step. The `suspended` and
+`disabled` statuses are enforced by local authentication and remain part of
+the contract for future session work.
 
 The following remain outside this issue and are not implied by this contract:
 

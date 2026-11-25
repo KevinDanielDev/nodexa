@@ -14,8 +14,8 @@ import { UserCredential } from '../user/entities/user-credential.entity.js';
 
 import { usersSeed } from './data/users.seed.js';
 import { ESeedStatus } from './enums/seed-status.enum.js';
-import { passwordHash } from '../common/utils/passwordHash.js';
-import { normalizedEmail } from '../common/utils/normalizedEmail.js';
+import { passwordHash } from '../common/utils/password-hash.js';
+import { normalizedEmail } from '../common/utils/normalized-email.js';
 
 @Injectable()
 export class SeedService {

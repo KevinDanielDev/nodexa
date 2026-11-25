@@ -19,6 +19,8 @@ const createDependencies = () => {
   const userRepository = {
     findOne: vi.fn(),
     findOneBy: vi.fn(),
+    merge: vi.fn((target, data) => Object.assign(target, data)),
+    save: vi.fn(),
   };
   const userIdentityRepository = {
     create: vi.fn((value) => value),
@@ -229,6 +231,84 @@ describe('UserService', () => {
       await expect(
         service.removeUserIdentity('user-id', EIdentityProvider.GOOGLE),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('user relation loading', () => {
+    it('loads all relations by default for an existing user', async () => {
+      const { service, userRepository } = createDependencies();
+      userRepository.findOne.mockResolvedValue({ id: 'user-id' });
+
+      await expect(service.getUserByIdWithRelations('user-id')).resolves.toEqual(
+        { id: 'user-id' },
+      );
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-id' },
+        relations: {
+          credential: true,
+          identities: true,
+          sessions: true,
+        },
+      });
+    });
+
+    it('loads only requested relations for normalized email lookups', async () => {
+      const { service, userRepository } = createDependencies();
+      userRepository.findOne.mockResolvedValue({ id: 'user-id' });
+
+      await service.getUserByNormalizedEmail('person@gmail.com', {
+        credential: true,
+        identities: false,
+        sessions: false,
+      });
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { normalizedEmail: 'person@gmail.com' },
+        relations: {
+          credential: true,
+          identities: false,
+          sessions: false,
+        },
+      });
+    });
+
+    it('updates lastLoginAt without loading any relation', async () => {
+      const { service, userRepository } = createDependencies();
+      const user = { id: 'user-id', lastLoginAt: null };
+      const lastLoginAt = new Date('2026-01-02T00:00:00.000Z');
+      userRepository.findOne.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, lastLoginAt });
+
+      await expect(
+        service.updateUserLastLogin(user.id, lastLoginAt),
+      ).resolves.toEqual({ ...user, lastLoginAt });
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: user.id },
+        relations: {
+          credential: false,
+          identities: false,
+          sessions: false,
+        },
+      });
+      expect(userRepository.save).toHaveBeenCalledWith({
+        ...user,
+        lastLoginAt,
+      });
+    });
+
+    it('does not save lastLoginAt when the user no longer exists', async () => {
+      const { service, userRepository } = createDependencies();
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateUserLastLogin(
+          'missing-user',
+          new Date('2026-01-02T00:00:00.000Z'),
+        ),
+      ).resolves.toBeNull();
+      expect(userRepository.save).not.toHaveBeenCalled();
     });
   });
 });

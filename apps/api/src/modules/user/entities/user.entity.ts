@@ -13,7 +13,7 @@ import { UserIdentity } from './user-identity.entity.js';
 import { UserCredential } from './user-credential.entity.js';
 
 import { EUserStatus } from '../enums/index.js';
-import { normalizedEmail } from '../../common/utils/normalizedEmail.js';
+import { normalizedEmail } from '../../common/utils/normalized-email.js';
 
 // Indexes
 @Entity('users')

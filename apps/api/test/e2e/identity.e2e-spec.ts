@@ -8,7 +8,7 @@ import request from 'supertest';
 
 import { AppModule } from '../../src/app.module.js';
 
-import { normalizedEmail } from '../../src/modules/common/utils/normalizedEmail.js';
+import { normalizedEmail } from '../../src/modules/common/utils/normalized-email.js';
 import { EIdentityProvider } from '../../src/modules/user/enums/identity-provider.enum.js';
 import { UserCredential } from '../../src/modules/user/entities/user-credential.entity.js';
 import { UserIdentity } from '../../src/modules/user/entities/user-identity.entity.js';
