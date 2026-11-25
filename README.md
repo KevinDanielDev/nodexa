@@ -10,8 +10,12 @@ Base monorepo for Nodexa.
 - Oxlint for the NestJS API
 - Vitest for API tests
 
-The application workspaces and shared domain packages will be added as the
-NestJS, Vue, and Quasar structure is defined.
+The current application workspace is a NestJS API in `apps/api`. It provides
+the initial account and identity core, local credential verification through an
+internal `AuthService`, PostgreSQL persistence, idempotent seeds, and the
+corresponding unit, integration, and end-to-end test structure. Vue, Quasar,
+HTTP authentication exposure, JWTs, cookies, and server-managed session flows
+remain future work.
 
 ## Commands
 

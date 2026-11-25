@@ -22,8 +22,11 @@ bun run --cwd apps/api test:e2e
 ```
 
 La API expone `GET /health` como verificación y actualmente incluye endpoints
-internos de cuentas, vinculación de identidades y carga de usuarios. Los flujos
-de autenticación y la emisión de JWT están fuera de este milestone.
+internos de cuentas, vinculación de identidades y carga de usuarios. La
+autenticación mediante credenciales locales está implementada como un
+`AuthService` interno, pero todavía no está expuesta mediante un controller
+HTTP. La emisión de JWT, las cookies y las sesiones administradas por el
+servidor permanecen fuera de este paso.
 
 ## Pruebas
 
@@ -34,6 +37,8 @@ estructura de módulos de `src`:
 test/
 ├── unit/
 │   └── modules/
+│       ├── auth/
+│       ├── common/
 │       ├── database/migrations/
 │       ├── identities/
 │       ├── seed/
@@ -45,12 +50,13 @@ test/
 ```
 
 Las pruebas unitarias verifican el comportamiento de las entidades, las reglas
-de los servicios, la idempotencia del seed, los metadatos de TypeORM, la
-estructura de las migraciones, sus restricciones, índices y reversibilidad. No
-requieren PostgreSQL:
+de autenticación local, la verificación de hashes, las opciones de carga de
+relaciones, las reglas de los servicios, la idempotencia del seed, los
+metadatos de TypeORM, la estructura de las migraciones, sus restricciones,
+índices y reversibilidad. No requieren PostgreSQL:
 
 ```bash
-bun run --cwd apps/api test
+RUN_DATABASE_TESTS=false bun run --cwd apps/api test
 ```
 
 Las pruebas de integración de persistencia verifican restricciones específicas
@@ -101,6 +107,22 @@ Los endpoints internos actuales son:
   método de autenticación.
 - `POST /seed/users` — carga el seed determinista y es idempotente mediante un
   hash del contenido.
+
+## Límite de la autenticación local
+
+`AuthService.login()` valida credenciales locales para una cuenta existente.
+Normaliza el correo, carga únicamente la relación de credencial necesaria,
+verifica la contraseña mediante Argon2id, rechaza credenciales inexistentes o
+inválidas, bloquea cuentas inactivas o eliminadas lógicamente, actualiza
+`users.last_login_at` tras una autenticación exitosa y devuelve una proyección
+sanitizada del usuario. Todas las rutas de autenticación fallida utilizan la
+misma respuesta genérica de credenciales inválidas, incluidas las cuentas
+inactivas y eliminadas lógicamente.
+
+Este servicio todavía no crea JWT, cookies ni sesiones persistentes. El
+contrato HTTP de autenticación pertenece a una issue posterior y el ciclo de
+vida de sesiones pertenece a la issue de sesiones administradas por el
+servidor.
 
 La validación se aplica globalmente mediante `ValidationPipe` y los conflictos
 de base de datos se traducen mediante el filtro global de excepciones.
@@ -181,6 +203,9 @@ src/
     │   └── migrations/
     ├── health/
     ├── common/
+    ├── auth/
+    │   ├── auth.module.ts
+    │   └── auth.service.ts
     ├── identities/
     ├── seed/
     └── user/

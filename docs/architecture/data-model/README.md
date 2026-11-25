@@ -95,8 +95,10 @@ core needed for:
 - account status persistence;
 - account, identity-linking, seed, and persistence tests.
 
-Suspension behavior, session revocation, and authentication flows remain outside
-this issue even though their future persistence model is represented here.
+The internal local authentication service now validates credential hashes and
+updates `users.last_login_at`. HTTP exposure, JWTs, cookies, session creation,
+and session revocation remain outside this implementation step even though
+their future persistence model is represented here.
 
 The following modeled areas are outside this milestone unless a later issue
 explicitly includes them:
@@ -140,8 +142,10 @@ The following points remain open for later issues:
 - The first implementation scope for `email_verified_at`,
   `password_reset_tokens`, and `email_verification_tokens` remains to be
   decided.
-- The semantics of the `active`, `suspended`, and `disabled` user statuses
-  must be defined.
+- The administrative semantics of the `active`, `suspended`, and `disabled`
+  user statuses may be refined later; local authentication currently allows
+  only `active` accounts and rejects suspended, disabled, and logically deleted
+  accounts.
 - The current unique constraint on `normalized_email` prevents reusing the
   email of a soft-deleted user.
 - Email normalization and the relationship between `email` and

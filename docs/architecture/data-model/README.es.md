@@ -101,9 +101,10 @@ cuentas necesario para:
 - la persistencia del estado de cuenta;
 - las pruebas de cuentas, linking, seed y persistencia.
 
-El comportamiento de suspensión, la revocación de sesiones y los flujos de
-autenticación permanecen fuera de esta issue aunque su modelo de persistencia
-futuro esté representado aquí.
+El servicio interno de autenticación local ahora valida hashes de credenciales
+y actualiza `users.last_login_at`. La exposición HTTP, los JWT, las cookies, la
+creación de sesiones y la revocación de sesiones permanecen fuera de este paso,
+aunque su modelo de persistencia futuro esté representado aquí.
 
 Las siguientes áreas modeladas están fuera de este milestone salvo que una
 issue posterior las incluya explícitamente:
@@ -149,8 +150,10 @@ Los siguientes puntos permanecen abiertos para issues posteriores:
 
 - Aún debe decidirse el alcance inicial de `email_verified_at`,
   `password_reset_tokens` y `email_verification_tokens`.
-- Debe definirse el significado de los estados `active`, `suspended` y
-  `disabled`.
+- Las semánticas administrativas de los estados `active`, `suspended` y
+  `disabled` pueden refinarse más adelante; la autenticación local actualmente
+  solo permite cuentas `active` y rechaza cuentas suspendidas, deshabilitadas o
+  eliminadas lógicamente.
 - La restricción actual sobre `normalized_email` impide reutilizar el correo
   de un usuario eliminado lógicamente.
 - Deben definirse la normalización del correo y la relación entre `email` y

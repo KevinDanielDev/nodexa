@@ -33,6 +33,16 @@ El registro público no forma parte del flujo actual del producto. Las cuentas
 se crean mediante un proceso de invitación, pero el flujo de invitaciones está
 fuera del alcance de esta issue.
 
+El servicio actual de autenticación local valida credenciales para una cuenta
+existente. Normaliza el correo, carga únicamente la relación de credencial
+necesaria para verificarlo, rechaza credenciales inexistentes o inválidas,
+bloquea cuentas inactivas o eliminadas lógicamente y actualiza
+`users.last_login_at` después de una autenticación exitosa. Devuelve una
+proyección sanitizada del usuario; todavía no emite JWT ni crea cookies o
+sesiones persistentes. Todas las rutas de autenticación fallida utilizan la
+misma respuesta genérica de credenciales inválidas, incluidas las cuentas
+inactivas y eliminadas lógicamente.
+
 ### Identidades externas
 
 Las identidades de proveedores externos están representadas por
@@ -119,12 +129,15 @@ cuentas y métodos de autenticación:
 - identidades de Google;
 - el modelo de persistencia para sesiones administradas por el servidor;
 - la persistencia del estado de cuenta;
+- la verificación de credenciales locales mediante el `AuthService` interno;
+- el registro del último login mediante `users.last_login_at`;
 - las pruebas de cuentas, linking, seed y persistencia.
 
-El comportamiento de suspensión, la revocación de sesiones y los flujos de
-autenticación no se implementan en esta issue. Los estados `suspended` y
-`disabled` permanecen como parte del contrato del modelo para futuras issues de
-autenticación y sesiones.
+La exposición HTTP de autenticación, la emisión de JWT, las cookies, la
+creación de sesiones y la revocación de sesiones no se implementan en este
+paso. Los estados `suspended` y `disabled` ya son considerados por la
+autenticación local y permanecen como parte del contrato para el trabajo futuro
+de sesiones.
 
 Lo siguiente permanece fuera de esta issue y no se deriva de este contrato:
 
